@@ -1,0 +1,106 @@
+{
+  "author": {
+    "email": "tony.quetano@planttheidea.com",
+    "name": "Tony Quetano",
+    "url": "https://www.planttheidea.com/"
+  },
+  "bugs": {
+    "url": "https://github.com/planttheidea/kysely-tester/issues"
+  },
+  "description": "In-memory database unit and integration testing infrastructure via `kysely`",
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.6",
+    "@planttheidea/build-tools": "^2.0.8",
+    "@types/better-sqlite3": "^9.6.0",
+    "@vitest/coverage-v8": "^4.1.11",
+    "better-sqlite3": "^13.0.3",
+    "eslint": "^9.39.5",
+    "kysely": "^0.29.5",
+    "prettier": "^3.9.6",
+    "release-it": "^21.0.2",
+    "rollup": "^4.63.1",
+    "typescript": "^6.0.3",
+    "vite": "^8.2.2",
+    "vitest": "^4.1.11"
+  },
+  "engines": {
+    "node": ">=22.6.0"
+  },
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "import": {
+        "types": "./dist/es/index.d.mts",
+        "default": "./dist/es/index.mjs"
+      }
+    },
+    "./setup": {
+      "import": {
+        "default": "./dist/es/setup.mjs"
+      }
+    }
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md",
+    "index.d.ts",
+    "package.json"
+  ],
+  "homepage": "https://github.com/planttheidea/kysely-tester#readme",
+  "keywords": [
+    "kysely",
+    "testing",
+    "pglite",
+    "sqlite",
+    "postgres",
+    "migrations",
+    "vitest"
+  ],
+  "license": "MIT",
+  "main": "./dist/es/index.mjs",
+  "module": "./dist/es/index.mjs",
+  "name": "@planttheidea/kysely-tester",
+  "packageManager": "yarn@4.18.0",
+  "peerDependencies": {
+    "@electric-sql/pglite": ">=0.5.0",
+    "better-sqlite3": ">=13.0.0",
+    "kysely": ">=0.29.0",
+    "vitest": ">=4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@electric-sql/pglite": {
+      "optional": true
+    },
+    "better-sqlite3": {
+      "optional": true
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/planttheidea/kysely-tester.git"
+  },
+  "scripts": {
+    "build": "npm run clean && npm run build:dist",
+    "build:dist": "NODE_ENV=production rollup -c config/rollup.config.js",
+    "clean": "rm -rf dist",
+    "clean:es": "rm -rf dist/es",
+    "format": "prettier . --log-level=warn --write",
+    "format:check": "prettier . --log-level=warn --check",
+    "lint": "eslint --max-warnings=0",
+    "release:alpha": "release-it --config=config/release-it/alpha.json",
+    "release:beta": "release-it --config=config/release-it/beta.json",
+    "release:rc": "release-it --config=config/release-it/rc.json",
+    "release:scripts": "npm run format:check && npm run typecheck && npm run lint && npm run test && npm run build",
+    "release:stable": "release-it --config=config/release-it/stable.json",
+    "test": "npm run build:dist && vitest run --config=config/vitest.config.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "sideEffects": false,
+  "type": "module",
+  "types": "./index.d.ts",
+  "version": "1.0.0"
+}
