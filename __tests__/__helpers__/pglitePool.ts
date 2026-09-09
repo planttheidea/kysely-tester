@@ -31,7 +31,7 @@ async function establish(db: AnyKysely, state: MigrationState): Promise<void> {
  * The pool the package's own pglite tests lease from — the same infrastructure
  * every other package uses, pointed at two throwaway migrations.
  */
-export const fixturePoolConfig: PglitePoolConfig = {
+export const fixturePoolConfig: PglitePoolConfig<PGlite> = {
   createInstance: async () => await PGlite.create(),
   createQueryBuilder: (instance) =>
     new Kysely({

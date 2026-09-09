@@ -1,4 +1,4 @@
-import type { PGlite } from '@electric-sql/pglite';
+import type { PgliteInstance } from './internalTypes.js';
 
 const SETTING = 'pglite_pool.schema_changed';
 const FUNCTION = 'public.pglite_pool_record_schema_change';
@@ -36,7 +36,7 @@ export interface SchemaChangeStatus {
  * Setting it non-locally also makes it transactional in the way that matters:
  * DDL rolled back takes its own flag with it.
  */
-export async function createSchemaChangeDetector(instance: PGlite): Promise<void> {
+export async function createSchemaChangeDetector(instance: PgliteInstance): Promise<void> {
   await instance.query(`
     CREATE OR REPLACE FUNCTION ${FUNCTION}() RETURNS event_trigger AS $$
       BEGIN PERFORM set_config('${SETTING}', '1', false); END;
@@ -58,7 +58,7 @@ export async function createSchemaChangeDetector(instance: PGlite): Promise<void
  * whole mechanism exists to catch — so an unarmed reading means "rebuild",
  * never "clean".
  */
-export async function getSchemaChangeStatus(instance: PGlite): Promise<SchemaChangeStatus> {
+export async function getSchemaChangeStatus(instance: PgliteInstance): Promise<SchemaChangeStatus> {
   const { rows } = await instance.query<SchemaChangeStatus>(STATUS_QUERY);
 
   return rows[0] ?? { armed: false, changed: true };

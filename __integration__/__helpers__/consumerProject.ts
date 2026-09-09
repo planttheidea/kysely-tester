@@ -14,6 +14,32 @@ export interface ConsumerProject {
   write: (relativePath: string, contents: string) => Promise<void>;
 }
 
+export interface ConsumerProjectOptions {
+  /**
+   * Which drivers the consumer installs. Both by default, because that is what
+   * a project reaching for either half of the package looks like — but each on
+   * its own is the case worth guarding, since both drivers are optional peers
+   * and a consumer who wants one should never have to install the other.
+   */
+  drivers?: readonly Driver[];
+}
+
+export type Driver = keyof typeof DRIVER_DEPENDENCIES;
+
+const DRIVER_DEPENDENCIES = {
+  pglite: ['@electric-sql/pglite'],
+  sqlite: ['better-sqlite3'],
+} as const satisfies Record<string, readonly string[]>;
+
+/**
+ * Named explicitly rather than left to arrive on its own. `@types/node` used to
+ * reach the consumer as a transitive dependency of `@types/better-sqlite3`, so
+ * dropping the latter — which a consumer has no reason to install, now that the
+ * driver's types stay inside this package — took the former with it and broke a
+ * typecheck that had nothing to do with sqlite.
+ */
+const BASE_DEPENDENCIES = ['@types/node', 'kysely', 'typescript', 'vitest'] as const;
+
 const PACKAGE_ROOT = join(import.meta.dirname, '..', '..');
 
 /**
@@ -42,7 +68,10 @@ export async function packPackage(): Promise<string> {
  * are really Node's to resolve. Both hide breakage a published package would hit
  * on the first install.
  */
-export async function createConsumerProject(tarball: string): Promise<ConsumerProject> {
+export async function createConsumerProject(
+  tarball: string,
+  { drivers = ['pglite', 'sqlite'] }: ConsumerProjectOptions = {},
+): Promise<ConsumerProject> {
   const root = await mkdtemp(join(tmpdir(), 'kysely-tester-consumer-'));
 
   async function write(relativePath: string, contents: string): Promise<void> {
@@ -52,6 +81,12 @@ export async function createConsumerProject(tarball: string): Promise<ConsumerPr
     await writeFile(target, contents, 'utf8');
   }
 
+  const dependencies: Record<string, string> = { '@planttheidea/kysely-tester': `file:${tarball}` };
+
+  for (const name of [...BASE_DEPENDENCIES, ...drivers.flatMap((driver) => DRIVER_DEPENDENCIES[driver])]) {
+    dependencies[name] = getDevDependencyRange(name);
+  }
+
   await write(
     'package.json',
     JSON.stringify(
@@ -59,15 +94,9 @@ export async function createConsumerProject(tarball: string): Promise<ConsumerPr
         name: 'consumer-fixture',
         private: true,
         type: 'module',
-        dependencies: {
-          '@electric-sql/pglite': getDevDependencyRange('@electric-sql/pglite'),
-          '@planttheidea/kysely-tester': `file:${tarball}`,
-          '@types/better-sqlite3': getDevDependencyRange('@types/better-sqlite3'),
-          'better-sqlite3': getDevDependencyRange('better-sqlite3'),
-          kysely: getDevDependencyRange('kysely'),
-          typescript: getDevDependencyRange('typescript'),
-          vitest: getDevDependencyRange('vitest'),
-        },
+        dependencies: Object.fromEntries(
+          Object.entries(dependencies).sort(([left], [right]) => left.localeCompare(right)),
+        ),
       },
       null,
       2,
