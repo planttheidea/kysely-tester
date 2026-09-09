@@ -10,6 +10,7 @@ vi.mock('node:child_process', async (importOriginal) => {
 });
 
 const SOCKET_VARIABLE = 'PGLITE_POOL_SOCKET';
+const DEBUG_VARIABLE = 'PGLITE_POOL_DEBUG';
 
 /**
  * Stands in for the forked pool, which is otherwise the only thing that can
@@ -62,6 +63,7 @@ let originalSocket: string | undefined;
 
 beforeEach(() => {
   originalSocket = process.env[SOCKET_VARIABLE];
+  Reflect.deleteProperty(process.env, DEBUG_VARIABLE);
 });
 
 afterEach(() => {
@@ -73,6 +75,8 @@ afterEach(() => {
     process.env[SOCKET_VARIABLE] = originalSocket;
   }
 
+  Reflect.deleteProperty(process.env, DEBUG_VARIABLE);
+  vi.unstubAllGlobals();
   vi.clearAllMocks();
 });
 
@@ -243,5 +247,50 @@ describe('a pool that never becomes ready', () => {
     pool.emit('exit', 1);
 
     await expect(pending).rejects.toThrow('The pglite pool exited with code 1 before it was ready.');
+  });
+});
+
+describe('pool announcements', () => {
+  test('says nothing about a pool that started cleanly', async () => {
+    const log = vi.fn();
+
+    vi.stubGlobal('console', { ...console, log });
+
+    const { setup } = createSetup();
+
+    await startPool(setup, (pool) => {
+      pool.notifyReady('/tmp/pool-l.sock');
+    });
+
+    expect(log).not.toHaveBeenCalled();
+  });
+
+  test('names the socket and the log file when debugging is asked for', async () => {
+    const log = vi.fn();
+
+    vi.stubGlobal('console', { ...console, log });
+    process.env[DEBUG_VARIABLE] = '1';
+
+    const { setup } = createSetup();
+
+    await startPool(setup, (pool) => {
+      pool.notifyReady('/tmp/pool-m.sock');
+    });
+
+    expect(log).toHaveBeenCalledWith('pglite pool: serving /tmp/pool-m.sock, logging to /tmp/pool.log');
+  });
+
+  test('still reports a pool that failed to start, debugging or not', async () => {
+    const { setup } = createSetup();
+    const pool = new FakePool();
+
+    forkMock.mockReturnValueOnce(pool);
+
+    const pending = setup();
+
+    await Promise.resolve();
+    pool.emit('message', { message: 'no such export', status: 'failed' });
+
+    await expect(pending).rejects.toThrow('The pglite pool failed to start: no such export');
   });
 });

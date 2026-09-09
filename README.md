@@ -172,6 +172,19 @@ expect(await getTable(db, 'widget')).toHaveColumns({
 
 Call `extendExpect()` yourself instead if you already have a setup file.
 
+## Debugging a pool
+
+The pool is silent when it works. To have it name the socket it is serving and the file it is logging to, set
+`PGLITE_POOL_DEBUG`:
+
+```sh
+PGLITE_POOL_DEBUG=1 yarn test
+```
+
+The log file is the pool's own, opened by the pool process rather than inherited, so it survives the run that produced
+it — which is the point, since a pool that dies mid-run outlives the vitest process that forked it. Failures to start
+are always reported, debugging or not.
+
 ## Requirements
 
 Node 22.6 or later. The pool process imports your config module directly, so it relies on Node's built-in type stripping

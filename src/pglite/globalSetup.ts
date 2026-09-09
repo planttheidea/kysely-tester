@@ -5,6 +5,16 @@ import { dirname, join } from 'node:path';
 import { POOL_SOCKET_VARIABLE } from './client.js';
 
 const STOP_TIMEOUT = 5000;
+/**
+ * Set to any non-empty value to have the pool announce where it is serving and
+ * which file it is logging to.
+ *
+ * Off by default because a test run that goes well has no use for either, and
+ * on by a single environment variable because the run you want them for is one
+ * that already went wrong — reaching for `PGLITE_POOL_DEBUG=1` beats editing a
+ * committed config and remembering to put it back.
+ */
+const POOL_DEBUG_VARIABLE = 'PGLITE_POOL_DEBUG';
 
 export interface PglitePoolGlobalSetupOptions {
   /** Name of the `PglitePoolConfig` export to read out of `configPath`. */
@@ -97,7 +107,10 @@ async function getSocketPath(pool: ChildProcess): Promise<string> {
   return await new Promise<string>((resolve, reject) => {
     pool.once('message', (message: ReadyMessage) => {
       if (message.status === 'ready' && message.socketPath) {
-        console.log(`pglite pool: serving ${message.socketPath}, logging to ${String(message.logPath)}`);
+        if (process.env[POOL_DEBUG_VARIABLE]) {
+          console.log(`pglite pool: serving ${message.socketPath}, logging to ${String(message.logPath)}`);
+        }
+
         resolve(message.socketPath);
 
         return;
