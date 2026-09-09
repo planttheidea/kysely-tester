@@ -26,5 +26,5 @@
     "rootDir": "./"
   },
   "exclude": ["**/node_modules/**", "dist/**/*"],
-  "include": ["config/**/*.ts", "src/**/*.ts", "__tests__/**/*.ts"]
+  "include": ["__integration__/**/*.ts", "__tests__/**/*.ts", "config/**/*.ts", "src/**/*.ts"]
 }

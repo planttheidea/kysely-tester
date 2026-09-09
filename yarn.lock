@@ -879,6 +879,7 @@ __metadata:
     "@vitest/coverage-v8": "npm:^4.1.11"
     better-sqlite3: "npm:^13.0.3"
     eslint: "npm:^9.39.5"
+    execa: "npm:^10.0.1"
     kysely: "npm:^0.29.5"
     prettier: "npm:^3.9.6"
     release-it: "npm:^21.0.2"

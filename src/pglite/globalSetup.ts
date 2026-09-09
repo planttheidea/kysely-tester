@@ -73,7 +73,9 @@ export function createPglitePoolGlobalSetup(options: PglitePoolGlobalSetupOption
 
       await stop(pool);
       pool = undefined;
-      process.env[POOL_SOCKET_VARIABLE] = undefined;
+      // Removed rather than set to `undefined`, which `process.env` stores as
+      // the string "undefined" — truthy, and so read back as a socket path.
+      Reflect.deleteProperty(process.env, POOL_SOCKET_VARIABLE);
     },
   };
 }

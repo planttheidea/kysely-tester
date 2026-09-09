@@ -6,6 +6,14 @@ export default createEslintConfig({
   source: 'src',
   configs: [
     {
+      // The integration suite is a test folder by every measure except its name,
+      // which has to differ so the unit config's glob leaves it alone.
+      files: ['__integration__/**/*.ts'],
+      languageOptions: {
+        parserOptions: { projectService: true },
+      },
+    },
+    {
       files: ['config/**/*.js'],
       rules: {
         // `eslint-plugin-import` parses at ES2018, so following an import into a
