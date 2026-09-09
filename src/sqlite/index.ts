@@ -1,5 +1,6 @@
 import SqLite from 'better-sqlite3';
 import { CamelCasePlugin, Kysely, SqliteDialect, sql } from 'kysely';
+import { registerTypeScriptResolution } from '../typeScriptResolution.js';
 import type { FactoryConfig, MockSqliteDatabaseFactory, Options } from './internalTypes.js';
 
 export function createMockSqliteDatabaseFactory<const Config extends FactoryConfig>(
@@ -9,6 +10,10 @@ export function createMockSqliteDatabaseFactory<const Config extends FactoryConf
   type MigrationState = keyof Migrations | null;
 
   const defaultMigrationState = config.migrationOrder.at(-1) ?? null;
+
+  // The migration modules below are imported by path, which reaches Node
+  // directly rather than the test runner's resolver.
+  registerTypeScriptResolution();
 
   function createBareDatabase(): Kysely<unknown> {
     return new Kysely({
