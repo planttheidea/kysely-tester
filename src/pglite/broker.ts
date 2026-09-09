@@ -6,6 +6,8 @@ import { join } from 'node:path';
 import type { PGlite } from '@electric-sql/pglite';
 import type { AnyKysely } from '../types.js';
 import type { MigrationState, PglitePool, PglitePoolConfig } from './internalTypes.js';
+import type { PoolLog } from './log.js';
+import { createPoolLog, NO_POOL_LOG } from './log.js';
 import type { PoolRequest, PoolResponse } from './protocol.js';
 import { createFrameReader, getSerializedError, sendFrame } from './protocol.js';
 import { createSchemaChangeDetector, getSchemaChangeStatus } from './schemaChange.js';
@@ -143,6 +145,10 @@ export async function createPglitePool(config: PglitePoolConfig): Promise<Pglite
   // a rebuild costs once the migrations themselves are done, and the migration
   // tests rebuild the same handful of states over and over.
   const baselines = new Map<string, Baseline>();
+  // Assigned once the socket directory exists, further down. Nothing can log
+  // before then: every path that logs runs in response to a worker, and no
+  // worker can connect until the server is listening in that directory.
+  let log: PoolLog = NO_POOL_LOG;
 
   async function getBaseline(instance: PGlite, state: MigrationState): Promise<Baseline> {
     const key = getStateKey(state);
@@ -311,7 +317,9 @@ export async function createPglitePool(config: PglitePoolConfig): Promise<Pglite
         // Same reasoning as a failed acquire, and louder: nobody is awaiting
         // this, so an unhandled rejection here would take the pool process down
         // and leave every worker waiting on a socket that will never answer.
-        console.error('Failed to clear a pooled database:', error);
+        // It goes to the pool's log because this process was forked with its
+        // output ignored, which is where every one of these used to end up.
+        log(`failed to clear a pooled database: ${getErrorDetail(error)}`);
         surrenderEntry(entry);
       },
     );
@@ -408,6 +416,9 @@ export async function createPglitePool(config: PglitePoolConfig): Promise<Pglite
 
   const socketDirectory = await mkdtemp(join(tmpdir(), 'pglite-pool-'));
   const socketPath = join(socketDirectory, 'pool.sock');
+  const logPath = join(socketDirectory, 'pool.log');
+
+  log = createPoolLog(logPath);
 
   try {
     await listen(server, socketPath);
@@ -422,6 +433,7 @@ export async function createPglitePool(config: PglitePoolConfig): Promise<Pglite
 
   return {
     lastUsedAt: () => (sockets.size > 0 ? Date.now() : lastUsedAt),
+    logPath,
     socketPath,
     stop: async () => {
       // Destroying the sockets below fires every close handler, and clearing an
@@ -473,4 +485,8 @@ async function close(server: Server): Promise<void> {
       resolve();
     });
   });
+}
+
+function getErrorDetail(error: unknown): string {
+  return error instanceof Error ? (error.stack ?? error.message) : String(error);
 }

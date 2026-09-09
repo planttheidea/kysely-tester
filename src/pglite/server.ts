@@ -1,29 +1,13 @@
-import { appendFileSync, rmSync } from 'node:fs';
+import { rmSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createPglitePool } from './broker.js';
 import type { PglitePool, PglitePoolConfig } from './internalTypes.js';
+import { createPoolLog } from './log.js';
 
 const IDLE_CHECK_INTERVAL = 30_000;
 const IDLE_LIMIT = 600_000;
-
-/**
- * Writes to the pool's own file rather than to stdout.
- *
- * stdout here is inherited, so it belongs to whatever process forked this one —
- * and the whole reason this process outlives that one is that vitest does not
- * keep it around. Once the parent is gone those writes go nowhere, which is how
- * a pool that died mid-run managed to say nothing about it.
- */
-function log(logPath: string, message: string): void {
-  try {
-    appendFileSync(logPath, `${new Date().toISOString()} ${message}\n`);
-  } catch {
-    // Stopping removes this file, and the exit handler still runs afterwards.
-    // A diagnostic that takes the process down is worse than a lost line.
-  }
-}
 
 async function startPool(): Promise<PglitePool> {
   const [configPath, configExport, rawSize] = process.argv.slice(2);
@@ -67,31 +51,32 @@ async function stopPool(pool: PglitePool): Promise<void> {
 export async function runPool(): Promise<void> {
   try {
     const pool = await startPool();
-    const logPath = join(dirname(pool.socketPath), 'pool.log');
+    const { logPath } = pool;
+    const log = createPoolLog(logPath);
 
     async function stop(reason: string): Promise<never> {
-      log(logPath, `stopping: ${reason}`);
+      log(`stopping: ${reason}`);
       await stopPool(pool);
       process.exit(0);
     }
 
-    log(logPath, `started as pid ${String(process.pid)}, serving ${pool.socketPath}`);
+    log(`started as pid ${String(process.pid)}, serving ${pool.socketPath}`);
 
     // Nothing here writes to stdout any more, so an exit this file did not ask
     // for would otherwise be silent. `exit` fires for uncaught throws too, which
     // makes it the one handler that cannot be slipped past — only a signal that
     // cannot be caught gets past it, and that narrows the culprit by itself.
     process.on('exit', (code) => {
-      log(logPath, `exiting with code ${String(code)}`);
+      log(`exiting with code ${String(code)}`);
       // Synchronous, because an exit handler is the last place anything runs, and
       // it covers the exits `stop` never reaches — an uncaught throw above all.
       rmSync(dirname(pool.socketPath), { force: true, recursive: true });
     });
     process.on('uncaughtException', (error) => {
-      log(logPath, `uncaught: ${String(error.stack)}`);
+      log(`uncaught: ${String(error.stack)}`);
     });
     process.on('unhandledRejection', (reason) => {
-      log(logPath, `unhandled rejection: ${String(reason)}`);
+      log(`unhandled rejection: ${String(reason)}`);
     });
 
     for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP'] as const) {

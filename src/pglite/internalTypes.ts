@@ -27,6 +27,8 @@ export interface PglitePoolConfig {
 export interface PglitePool {
   /** When a worker last held or asked for a lease, for the idle shutdown. */
   lastUsedAt: () => number;
+  /** The pool's own log file, alongside its socket. */
+  logPath: string;
   socketPath: string;
   stop: () => Promise<void>;
 }
