@@ -112,7 +112,7 @@ beforeAll(async () => {
       }
     }
 
-    export const poolConfig: PglitePoolConfig = {
+    export const poolConfig: PglitePoolConfig<PGlite> = {
       createInstance: async () => await PGlite.create(),
       createQueryBuilder: (instance) => new Kysely({ dialect: new PGliteDialect({ pglite: instance }) }),
       establish,

@@ -1,7 +1,43 @@
-import SqLite from 'better-sqlite3';
+import { createRequire } from 'node:module';
 import { CamelCasePlugin, Kysely, SqliteDialect, sql } from 'kysely';
 import { registerTypeScriptResolution } from '../typeScriptResolution.js';
 import type { FactoryConfig, MockSqliteDatabaseFactory, Options } from './internalTypes.js';
+
+type SqLite = typeof import('better-sqlite3');
+
+const requireCjs = createRequire(import.meta.url);
+
+let cachedSqLite: SqLite | null = null;
+
+/**
+ * Loads the sqlite driver the first time a database is opened, rather than when
+ * this module is evaluated.
+ *
+ * `better-sqlite3` is an optional peer, but a static `import` of it is hoisted,
+ * so it would run on any import of this package at all — leaving a consumer who
+ * only ever leases from the pglite pool to install a native binding nothing in
+ * their suite calls. Requiring it at the point of use is what makes the peer
+ * honestly optional, and is the more direct way to reach a CommonJS addon
+ * besides. It also keeps the specifier out of a bundler's sight, which is the
+ * same point from the other side: nothing should try to resolve a driver that
+ * was deliberately left uninstalled.
+ */
+function loadSqLite(): SqLite {
+  if (cachedSqLite) {
+    return cachedSqLite;
+  }
+
+  try {
+    cachedSqLite = requireCjs('better-sqlite3') as SqLite;
+  } catch (error) {
+    throw new Error(
+      '`better-sqlite3` has to be installed to build a mock sqlite database. It is an optional peer dependency of this package, so it is not installed for you.',
+      { cause: error },
+    );
+  }
+
+  return cachedSqLite;
+}
 
 export function createMockSqliteDatabaseFactory<const Config extends FactoryConfig>(
   config: Config,
@@ -16,6 +52,8 @@ export function createMockSqliteDatabaseFactory<const Config extends FactoryConf
   registerTypeScriptResolution();
 
   function createBareDatabase(): Kysely<unknown> {
+    const SqLite = loadSqLite();
+
     return new Kysely({
       dialect: new SqliteDialect({
         database: new SqLite(':memory:'),

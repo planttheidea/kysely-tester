@@ -54,7 +54,7 @@ async function establish(db: AnyKysely, state: MigrationState): Promise<void> {
   await migrateTo(db, state);
 }
 
-export const poolConfig: PglitePoolConfig = {
+export const poolConfig: PglitePoolConfig<PGlite> = {
   createInstance: async () => await PGlite.create(),
   createQueryBuilder: (instance) =>
     new Kysely({ dialect: new PGliteDialect({ pglite: instance }), plugins: [new CamelCasePlugin()] }),
@@ -63,6 +63,11 @@ export const poolConfig: PglitePoolConfig = {
   wipe: wipePglite,
 };
 ```
+
+`PglitePoolConfig` takes the instance type as a parameter, and naming your driver there is what gives `createInstance`
+and `createQueryBuilder` their concrete types. The reason it is a parameter at all is that nothing shipped in this
+package's declarations names `@electric-sql/pglite` — so a consumer who uses only the sqlite factory never has to
+install it, even with `skipLibCheck` off.
 
 `establish` is handed a `MigrationState`: a step name to stop after, `null` for a bare instance with no migration
 applied, and `undefined` for the whole list.

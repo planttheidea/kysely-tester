@@ -4,7 +4,7 @@ export type { PooledPgliteOptions } from './pglite/client.js';
 export { connectPooledPglite, createPooledPglite, getPooledPglite, resetPooledPglite } from './pglite/client.js';
 export type { PglitePoolGlobalSetup, PglitePoolGlobalSetupOptions } from './pglite/globalSetup.js';
 export { createPglitePoolGlobalSetup } from './pglite/globalSetup.js';
-export type { MigrationState, PglitePoolConfig } from './pglite/internalTypes.js';
+export type { MigrationState, PgliteInstance, PglitePoolConfig } from './pglite/internalTypes.js';
 export { wipePglite } from './pglite/wipe.js';
 export { createMockSqliteDatabaseFactory } from './sqlite/index.js';
 export type { FactoryConfig, MockSqliteDatabaseFactory, Options } from './sqlite/internalTypes.js';

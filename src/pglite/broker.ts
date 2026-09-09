@@ -3,9 +3,8 @@ import type { Server, Socket } from 'node:net';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { PGlite } from '@electric-sql/pglite';
 import type { AnyKysely } from '../types.js';
-import type { MigrationState, PglitePool, PglitePoolConfig } from './internalTypes.js';
+import type { MigrationState, PgliteInstance, PglitePool, PglitePoolConfig } from './internalTypes.js';
 import type { PoolLog } from './log.js';
 import { createPoolLog, NO_POOL_LOG } from './log.js';
 import type { PoolRequest, PoolResponse } from './protocol.js';
@@ -41,7 +40,7 @@ interface WriteState {
 interface PoolEntry {
   baseline: Baseline | null;
   db: AnyKysely;
-  instance: PGlite;
+  instance: PgliteInstance;
   leased: boolean;
   state: MigrationState;
 }
@@ -55,11 +54,11 @@ interface PoolEntry {
  * only warns when there is nothing to roll back, so running this on every
  * release is cheaper than working out whether it is needed.
  */
-async function endTransaction(instance: PGlite): Promise<void> {
+async function endTransaction(instance: PgliteInstance): Promise<void> {
   await instance.query('ROLLBACK');
 }
 
-async function getTables(instance: PGlite): Promise<string[]> {
+async function getTables(instance: PgliteInstance): Promise<string[]> {
   // biome-ignore lint/style/useNamingConvention: PGlite instance expects snake_case.
   const { rows } = await instance.query<{ table_name: string; table_schema: string }>(TABLE_QUERY);
 
@@ -98,7 +97,7 @@ function createWriteQuery(tables: string[]): string {
   `;
 }
 
-async function getWriteState(instance: PGlite, writeQuery: string): Promise<WriteState> {
+async function getWriteState(instance: PgliteInstance, writeQuery: string): Promise<WriteState> {
   const { rows } = await instance.query<WriteState>(writeQuery);
 
   return rows[0] ?? { populated: '', sequences: '' };
@@ -116,7 +115,7 @@ function getPopulatedTables(state: WriteState): string[] {
  * migrator's own bookkeeping, without which the next rebuild would try to
  * replay migrations over a live schema.
  */
-async function readBaseline(instance: PGlite): Promise<Baseline> {
+async function readBaseline(instance: PgliteInstance): Promise<Baseline> {
   const tables = await getTables(instance);
   const seeded = await getWriteState(instance, createWriteQuery(tables));
   const truncatable = tables.filter((table) => !getPopulatedTables(seeded).includes(table));
@@ -150,7 +149,7 @@ export async function createPglitePool(config: PglitePoolConfig): Promise<Pglite
   // worker can connect until the server is listening in that directory.
   let log: PoolLog = NO_POOL_LOG;
 
-  async function getBaseline(instance: PGlite, state: MigrationState): Promise<Baseline> {
+  async function getBaseline(instance: PgliteInstance, state: MigrationState): Promise<Baseline> {
     const key = getStateKey(state);
     const cached = baselines.get(key);
 

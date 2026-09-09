@@ -1,5 +1,4 @@
 import { Kysely, KyselyPlugin, TableMetadata } from 'kysely';
-import { PGlite } from '@electric-sql/pglite';
 
 interface CustomMatchers<Result = unknown> {
     /**
@@ -42,11 +41,33 @@ declare function getTables<const Names extends string[] | readonly string[]>(db:
  * applied, and `undefined` for the whole list.
  */
 type MigrationState = string | null | undefined;
-interface PglitePoolConfig {
+/**
+ * The whole of a pglite instance this package touches.
+ *
+ * Deliberately structural rather than `PGlite` itself, so nothing shipped here
+ * names `@electric-sql/pglite` in its types. A driver that is an optional peer
+ * has to be optional to the typechecker too: a consumer who uses only the sqlite
+ * factory and runs with `skipLibCheck` off would otherwise get `TS2307` out of
+ * this package's own declarations, for a package they were told they could skip.
+ *
+ * The pool brokers instances it never has to understand — it hands each one back
+ * to `createQueryBuilder`, and asks it only for the bookkeeping queries the reset
+ * protocol runs — so the narrow shape costs nothing and a real `PGlite` satisfies
+ * it. Name the concrete type as `PglitePoolConfig<PGlite>` to get it back.
+ */
+interface PgliteInstance {
+    query: <Row>(query: string, params?: unknown[], options?: {
+        rowMode?: 'array' | 'object';
+    }) => Promise<{
+        affectedRows?: number;
+        rows: Row[];
+    }>;
+}
+interface PglitePoolConfig<Instance extends PgliteInstance = PgliteInstance> {
     /** Builds one pooled pglite instance. Called `size` times while the pool starts. */
-    createInstance: () => Promise<PGlite>;
+    createInstance: () => Promise<Instance>;
     /** Wraps a pooled instance for the establish/wipe hooks, plugins included. */
-    createQueryBuilder: (instance: PGlite) => AnyKysely;
+    createQueryBuilder: (instance: Instance) => AnyKysely;
     /** Brings a bare instance to the requested migration state. */
     establish: (db: AnyKysely, state: MigrationState) => Promise<void>;
     /**
@@ -152,4 +173,4 @@ interface MockSqliteDatabaseFactory<Config extends FactoryConfig> {
 declare function createMockSqliteDatabaseFactory<const Config extends FactoryConfig>(config: Config): MockSqliteDatabaseFactory<Config>;
 
 export { connectPooledPglite, createMockSqliteDatabaseFactory, createPglitePoolGlobalSetup, createPooledPglite, extendExpect, getPooledPglite, getTable, getTables, resetPooledPglite, wipePglite };
-export type { AnyKysely, FactoryConfig, MigrationState, MockSqliteDatabaseFactory, Options, PglitePoolConfig, PglitePoolGlobalSetup, PglitePoolGlobalSetupOptions, PooledPgliteOptions };
+export type { AnyKysely, FactoryConfig, MigrationState, MockSqliteDatabaseFactory, Options, PgliteInstance, PglitePoolConfig, PglitePoolGlobalSetup, PglitePoolGlobalSetupOptions, PooledPgliteOptions };
