@@ -159,13 +159,31 @@ existing handle, and `wipeMockDatabase` strips it back to bare.
 `getTable` and `getTables` read table metadata back out of a live database:
 
 ```ts
-import { getTable } from '@planttheidea/kysely-tester';
+import { getTable, getTables } from '@planttheidea/kysely-tester';
 
 const widget = await getTable(db, 'widget');
+const tables = await getTables(db, ['app.event', 'app.attendee']);
 ```
 
-Naming `@planttheidea/kysely-tester/setup` in `setupFiles` registers a `toHaveColumns` matcher, which compares a table's
-columns to their data types with the column names camel-cased:
+A name carrying a `.` is matched schema-qualified, a bare one on the table name alone — so a workspace whose tables all
+live in `public` never writes the prefix, and one that spreads them across `app` and `neon_auth` can still tell
+`app.event` from `neon_auth.event`. `getTables` keys its result by the names it was asked for, so a table that does not
+exist is present and `undefined` rather than missing.
+
+`getDomain`, `getDomains`, `getExtension` and `getExtensions` do the same for Postgres domains and installed extensions,
+which `db.introspection` does not report at all:
+
+```ts
+import { getDomain, getExtension } from '@planttheidea/kysely-tester';
+
+expect(await getDomain(db, 'app.template_status')).toEqual(expect.objectContaining({ underlyingType: 'text' }));
+expect(await getExtension(db, 'public.citext')).toBeDefined();
+```
+
+### Matchers
+
+Naming `@planttheidea/kysely-tester/setup` in `setupFiles` registers two matchers. `toHaveColumns` compares a table's
+columns to their data types, exhaustively unless `expected` is wrapped in `expect.objectContaining`:
 
 ```ts
 expect(await getTable(db, 'widget')).toHaveColumns({
@@ -175,7 +193,26 @@ expect(await getTable(db, 'widget')).toHaveColumns({
 });
 ```
 
-Call `extendExpect()` yourself instead if you already have a setup file.
+`toHaveColumn` asserts one column, optionally with its type. Negate it to assert absence, and pass only the name when
+you do — `.not.toHaveColumn(name, type)` reads as "no column of that type", so a same-named column that changed type
+would still satisfy it:
+
+```ts
+expect(await getTable(db, 'widget')).toHaveColumn('createdAt', 'timestamptz');
+expect(await getTable(db, 'widget')).not.toHaveColumn('retiredAt');
+```
+
+Call `extendExpect()` yourself instead if you already have a setup file. Both matchers camel-case a column's name before
+comparing it, which mirrors a Kysely instance carrying `CamelCasePlugin`. Turn that off for a schema whose columns are
+camel-cased in the database itself, or one that mixes the two, where the dialect's own spelling is the only one that
+names every column:
+
+```ts
+// testing/setup.ts
+import { extendExpect } from '@planttheidea/kysely-tester';
+
+extendExpect({ camelCase: false });
+```
 
 ## Debugging a pool
 

@@ -1,9 +1,12 @@
+export type { ExtendExpectOptions } from './expect/index.js';
 export { extendExpect } from './expect/index.js';
 export { getTable, getTables } from './introspection.js';
 export type { PooledPgliteOptions } from './pglite/client.js';
 export { connectPooledPglite, createPooledPglite, getPooledPglite, resetPooledPglite } from './pglite/client.js';
 export type { PglitePoolGlobalSetup, PglitePoolGlobalSetupOptions } from './pglite/globalSetup.js';
 export { createPglitePoolGlobalSetup } from './pglite/globalSetup.js';
+export type { DomainMetadata, ExtensionMetadata } from './pglite/introspection.js';
+export { getDomain, getDomains, getExtension, getExtensions } from './pglite/introspection.js';
 export type { MigrationState, PgliteInstance, PglitePoolConfig } from './pglite/internalTypes.js';
 export { wipePglite } from './pglite/wipe.js';
 export { createMockSqliteDatabaseFactory } from './sqlite/index.js';

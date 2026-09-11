@@ -39,6 +39,19 @@ function loadSqLite(): SqLite {
   return cachedSqLite;
 }
 
+/**
+ * A set of helpers that build throwaway in-memory sqlite databases from a
+ * migration list — each one created per call rather than leased, for the tests
+ * where the schema is all that is needed and startup cost matters more than
+ * dialect fidelity.
+ *
+ * ```ts
+ * export const { createMockDatabase } = createMockSqliteDatabaseFactory({
+ *   migrationOrder: MIGRATION_ORDER,
+ *   migrations: { createUserTable: join(import.meta.dirname, 'steps', 'createUserTable.ts') },
+ * });
+ * ```
+ */
 export function createMockSqliteDatabaseFactory<const Config extends FactoryConfig>(
   config: Config,
 ): MockSqliteDatabaseFactory<Config> {

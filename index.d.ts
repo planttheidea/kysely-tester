@@ -1,9 +1,34 @@
 import { Kysely, KyselyPlugin, TableMetadata } from 'kysely';
 
+interface ExtendExpectOptions {
+    /**
+     * Whether a column's name is camel-cased before it is compared, matching a
+     * Kysely instance that carries `CamelCasePlugin`. Defaults to `true`.
+     *
+     * Turn it off for a schema whose columns are camel-cased in the database
+     * itself, or one that mixes the two — `neon_auth.project_config` alongside
+     * `app.event` — where the dialect's own spelling is the only one that names
+     * every column.
+     */
+    camelCase?: boolean;
+}
 interface CustomMatchers<Result = unknown> {
     /**
-     * Asserts a table's columns against their data types, with column names
-     * camel-cased and types named the way the dialect reports them.
+     * Asserts a table has a single named column, optionally of a given data type.
+     *
+     * Negate with `.not` to assert absence, and pass only the name when you do:
+     * `.not.toHaveColumn(name, type)` reads as "no column of that type", so a
+     * same-named column that changed type would still satisfy it.
+     *
+     * ```ts
+     * expect(await getTable(db, 'widget')).not.toHaveColumn('retiredAt');
+     * ```
+     */
+    toHaveColumn(name: string, dataType?: string): Result;
+    /**
+     * Asserts a table's columns against their data types, with types named the
+     * way the dialect reports them and column names spelled per the `camelCase`
+     * option `extendExpect` was given.
      *
      * Exhaustive by default — every column has to appear. Wrap `expected` in
      * `expect.objectContaining` to assert only some of them. A table that was
@@ -26,13 +51,39 @@ declare module 'vitest' {
  * Registers the package's custom matchers with vitest's `expect`.
  *
  * Call it from a `setupFiles` module, or name `@planttheidea/kysely-tester/setup`
- * there directly and skip writing one.
+ * there directly and skip writing one — that entry is this call with its
+ * defaults.
  */
-declare function extendExpect(): void;
+declare function extendExpect({ camelCase }?: ExtendExpectOptions): void;
 
 type AnyKysely = Kysely<any>;
 
+/**
+ * The metadata a dialect reports for one table, or `undefined` when nothing by
+ * that name exists.
+ *
+ * `tableName` is matched schema-qualified when it carries a `.` — `app.event` —
+ * and on the table name alone when it does not, so a workspace that only ever
+ * uses `public` never has to write the prefix.
+ *
+ * ```ts
+ * expect(await getTable(db, 'widget')).toHaveColumns({ id: 'uuid' });
+ * ```
+ */
 declare function getTable(db: AnyKysely, tableName: string): Promise<TableMetadata | undefined>;
+/**
+ * The metadata for several tables in one introspection pass, keyed by the names
+ * that were asked for — so a name that matched nothing is present and
+ * `undefined` rather than absent, and a caller can assert on it directly.
+ *
+ * Names are matched the way {@link getTable} matches them.
+ *
+ * ```ts
+ * const tables = await getTables(db, ['app.event', 'app.attendee']);
+ *
+ * expect(tables['app.event']).toHaveColumns({ id: 'uuid' });
+ * ```
+ */
 declare function getTables<const Names extends string[] | readonly string[]>(db: AnyKysely, tableNames: Names): Promise<Record<Names[number], TableMetadata | undefined>>;
 
 /**
@@ -144,6 +195,56 @@ interface PglitePoolGlobalSetup {
  */
 declare function createPglitePoolGlobalSetup(options: PglitePoolGlobalSetupOptions): PglitePoolGlobalSetup;
 
+interface DomainMetadata {
+    checkConstraints: string;
+    collation: string | null;
+    default: string | null;
+    name: string;
+    notNull: boolean;
+    schema: string;
+    underlyingType: string;
+}
+interface ExtensionMetadata {
+    name: string;
+    schema: string | null;
+}
+/**
+ * The metadata for one Postgres domain, or `undefined` when nothing by that
+ * name exists.
+ *
+ * `domainName` is matched schema-qualified when it carries a `.` —
+ * `app.template_status` — and on the domain name alone when it does not.
+ *
+ * ```ts
+ * expect(await getDomain(db, 'app.template_status')).toBeUndefined();
+ * ```
+ */
+declare function getDomain(db: AnyKysely, domainName: string): Promise<DomainMetadata | undefined>;
+/**
+ * The metadata for several Postgres domains in one query, keyed by the names
+ * that were asked for — so a name that matched nothing is present and
+ * `undefined` rather than absent.
+ */
+declare function getDomains<const Names extends string[] | readonly string[]>(db: AnyKysely, domainNames: Names): Promise<Record<Names[number], DomainMetadata | undefined>>;
+/**
+ * The name and schema of one installed Postgres extension, or `undefined` when
+ * it is not installed.
+ *
+ * `extensionName` is matched schema-qualified when it carries a `.` —
+ * `public.citext` — and on the extension name alone when it does not.
+ *
+ * ```ts
+ * expect(await getExtension(db, 'public.citext')).toBeDefined();
+ * ```
+ */
+declare function getExtension(db: AnyKysely, extensionName: string): Promise<ExtensionMetadata | undefined>;
+/**
+ * The installed Postgres extensions among those asked for, keyed by the names
+ * that were asked for — so one that is not installed is present and
+ * `undefined` rather than absent.
+ */
+declare function getExtensions<const Names extends string[] | readonly string[]>(db: AnyKysely, extensionNames: Names): Promise<Record<Names[number], ExtensionMetadata | undefined>>;
+
 /**
  * Strips a pglite instance back to bare, so a pool config's `establish` can run
  * against it as if the instance had just booted.
@@ -156,21 +257,53 @@ declare function wipePglite(db: AnyKysely): Promise<void>;
 
 type Migrations<Config extends FactoryConfig> = Config['migrationOrder'][number] | null;
 interface FactoryConfig {
+    /** Migration names, in the order they should run. */
     migrationOrder: string[] | readonly string[];
+    /**
+     * Each migration name mapped to the absolute path of the module that owns it.
+     * The module is imported by path and expected to export `up`.
+     */
     migrations: Record<string, string>;
+    /**
+     * Anything the schema assumes but no migration creates — a table another
+     * system provisions, a seeded row a foreign key points at. Runs against a
+     * bare database before the first migration, whatever state is asked for.
+     */
     establishBaseState?: (db: AnyKysely) => Promise<void>;
 }
 interface Options<MigrationState> {
+    /**
+     * How far to migrate: a step name to stop after, or `null` for a bare
+     * database with no migration applied. Defaults to the last step in
+     * `migrationOrder`.
+     */
     migrationState?: MigrationState;
 }
 interface MockSqliteDatabaseFactory<Config extends FactoryConfig> {
+    /** An empty in-memory database, with neither base state nor migrations. */
     createBareDatabase: () => AnyKysely;
+    /** A new in-memory database, migrated to the requested state. */
     createMockDatabase: (options?: Options<Migrations<Config>>) => Promise<AnyKysely>;
+    /** Wipes an existing handle and rebuilds it at the requested state. */
     restoreMockDatabase: (db: AnyKysely, options?: Options<Migrations<Config>>) => Promise<void>;
+    /** Strips an existing handle back to bare, dropping everything in it. */
     wipeMockDatabase: (db: AnyKysely) => Promise<void>;
 }
 
+/**
+ * A set of helpers that build throwaway in-memory sqlite databases from a
+ * migration list — each one created per call rather than leased, for the tests
+ * where the schema is all that is needed and startup cost matters more than
+ * dialect fidelity.
+ *
+ * ```ts
+ * export const { createMockDatabase } = createMockSqliteDatabaseFactory({
+ *   migrationOrder: MIGRATION_ORDER,
+ *   migrations: { createUserTable: join(import.meta.dirname, 'steps', 'createUserTable.ts') },
+ * });
+ * ```
+ */
 declare function createMockSqliteDatabaseFactory<const Config extends FactoryConfig>(config: Config): MockSqliteDatabaseFactory<Config>;
 
-export { connectPooledPglite, createMockSqliteDatabaseFactory, createPglitePoolGlobalSetup, createPooledPglite, extendExpect, getPooledPglite, getTable, getTables, resetPooledPglite, wipePglite };
-export type { AnyKysely, FactoryConfig, MigrationState, MockSqliteDatabaseFactory, Options, PgliteInstance, PglitePoolConfig, PglitePoolGlobalSetup, PglitePoolGlobalSetupOptions, PooledPgliteOptions };
+export { connectPooledPglite, createMockSqliteDatabaseFactory, createPglitePoolGlobalSetup, createPooledPglite, extendExpect, getDomain, getDomains, getExtension, getExtensions, getPooledPglite, getTable, getTables, resetPooledPglite, wipePglite };
+export type { AnyKysely, DomainMetadata, ExtendExpectOptions, ExtensionMetadata, FactoryConfig, MigrationState, MockSqliteDatabaseFactory, Options, PgliteInstance, PglitePoolConfig, PglitePoolGlobalSetup, PglitePoolGlobalSetupOptions, PooledPgliteOptions };
